@@ -51,7 +51,11 @@ export function HotelSearch({ tripId, defaults }: HotelSearchProps) {
           citiesOnly
           submit={{ mode: "coords" }}
           defaultQuery={v?.placeQuery ?? defaults.placeQuery}
-          defaultValue={{ latitude: v?.latitude, longitude: v?.longitude }}
+          defaultValue={{
+            code: v?.placeCode,
+            latitude: v?.latitude,
+            longitude: v?.longitude,
+          }}
           errors={e?.latitude ?? e?.longitude}
         />
         <div className="grid gap-4 sm:grid-cols-4">

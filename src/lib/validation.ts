@@ -230,20 +230,37 @@ export const flightSearchSchema = z
     path: ["returnDate"],
   });
 
+// Blank means "not given", not 0 (which would search the Gulf of Guinea).
+const coordinate = (limit: number) =>
+  z
+    .string()
+    .default("")
+    .transform((v) => (v.trim() ? Number(v) : null))
+    .pipe(z.number().min(-limit).max(limit).nullable());
+
 export const hotelSearchSchema = z
   .object({
-    latitude: z.coerce
-      .number({ error: "Pick a city from the list." })
-      .min(-90)
-      .max(90),
-    longitude: z.coerce
-      .number({ error: "Pick a city from the list." })
-      .min(-180)
-      .max(180),
+    latitude: coordinate(90),
+    longitude: coordinate(180),
+    // Some cities have no coordinates, so the IATA code is the fallback.
+    placeCode: z
+      .string()
+      .default("")
+      .transform((v) => v.trim() || null)
+      .pipe(
+        z
+          .string()
+          .regex(/^[A-Z]{3}$/)
+          .nullable(),
+      ),
     checkInDate: isoDate,
     checkOutDate: isoDate,
     adults: count(1, 9, "Guests"),
     rooms: count(1, 5, "Rooms"),
+  })
+  .refine((s) => (s.latitude !== null && s.longitude !== null) || s.placeCode, {
+    message: "Pick a city from the list.",
+    path: ["latitude"],
   })
   .refine((s) => s.checkOutDate > s.checkInDate, {
     message: "Check-out must be after check-in.",

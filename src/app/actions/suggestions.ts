@@ -12,7 +12,8 @@ import {
   deleteSuggestion,
   vote,
 } from "@/lib/suggestions";
-import { DuffelError, searchFlights, searchHotels } from "@/lib/travel/duffel";
+import { DuffelError, searchFlights } from "@/lib/travel/duffel";
+import { LiteApiError, searchHotels } from "@/lib/travel/liteapi";
 import { signOption, verifyOption } from "@/lib/travel/signing";
 import type { FlightOption, HotelOption, Signed } from "@/lib/travel/types";
 import { isMember } from "@/lib/trips";
@@ -39,7 +40,8 @@ async function requireTripMember(formData: FormData) {
 }
 
 function searchError(error: unknown, values: Record<string, string>) {
-  if (error instanceof DuffelError) return { error: error.message, values };
+  if (error instanceof DuffelError || error instanceof LiteApiError)
+    return { error: error.message, values };
   throw error;
 }
 

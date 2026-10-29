@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { FlightOption, HotelOption, Place } from "./types";
+import type { FlightOption, Place } from "./types";
 
 const BASE_URL = "https://api.duffel.com";
 
@@ -49,10 +49,6 @@ async function duffel<T>(
       throw new DuffelError(
         "The Duffel access token was rejected. Check DUFFEL_ACCESS_TOKEN.",
       );
-    if (res.status === 403 && path.startsWith("/stays"))
-      throw new DuffelError(
-        "Hotel search isn't enabled on this Duffel account yet. Ask Duffel to turn on Stays.",
-      );
     if (res.status === 403)
       throw new DuffelError(
         first?.message ?? "Your Duffel account doesn't have access to this.",
@@ -99,29 +95,6 @@ type RawOffer = {
     fare_brand_name?: string | null;
     segments: (RawSegment & { passengers?: { cabin_class?: string }[] })[];
   }[];
-};
-
-type RawStayResult = {
-  id: string;
-  cheapest_rate_total_amount: string;
-  cheapest_rate_currency: string;
-  check_in_date: string;
-  check_out_date: string;
-  rooms?: number;
-  guests?: unknown[];
-  accommodation: {
-    name: string;
-    rating?: number | null;
-    review_score?: number | null;
-    photos?: { url: string }[] | null;
-    location?: {
-      address?: {
-        line_one?: string;
-        city_name?: string;
-        country_code?: string;
-      } | null;
-    } | null;
-  };
 };
 
 export async function suggestPlaces(query: string): Promise<Place[]> {
@@ -222,58 +195,4 @@ function normalizeOffer(offer: RawOffer): FlightOption {
       };
     }),
   };
-}
-
-export type HotelSearch = {
-  latitude: number;
-  longitude: number;
-  checkInDate: string;
-  checkOutDate: string;
-  adults: number;
-  rooms: number;
-};
-
-export async function searchHotels(
-  search: HotelSearch,
-): Promise<HotelOption[]> {
-  const data = await duffel<{ results: RawStayResult[] }>("/stays/search", {
-    method: "POST",
-    body: {
-      rooms: search.rooms,
-      guests: Array.from({ length: search.adults }, () => ({ type: "adult" })),
-      check_in_date: search.checkInDate,
-      check_out_date: search.checkOutDate,
-      location: {
-        radius: 10,
-        geographic_coordinates: {
-          latitude: search.latitude,
-          longitude: search.longitude,
-        },
-      },
-    },
-  });
-
-  return data.results
-    .map((r) => {
-      const address = r.accommodation.location?.address;
-      return {
-        resultId: r.id,
-        name: r.accommodation.name,
-        photoUrl: r.accommodation.photos?.[0]?.url ?? null,
-        rating: r.accommodation.rating ?? null,
-        reviewScore: r.accommodation.review_score ?? null,
-        address:
-          [address?.line_one, address?.city_name, address?.country_code]
-            .filter(Boolean)
-            .join(", ") || null,
-        totalAmount: r.cheapest_rate_total_amount,
-        totalCurrency: r.cheapest_rate_currency,
-        checkInDate: r.check_in_date ?? search.checkInDate,
-        checkOutDate: r.check_out_date ?? search.checkOutDate,
-        guests: search.adults,
-        rooms: search.rooms,
-      };
-    })
-    .sort((a, b) => Number(a.totalAmount) - Number(b.totalAmount))
-    .slice(0, 30);
 }

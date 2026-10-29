@@ -10,7 +10,10 @@ import type { Place } from "@/lib/travel/types";
 type PlaceInputProps = {
   label: string;
   placeholder?: string;
-  /** "code" submits `name` as an IATA code; "coords" submits `latitude` and `longitude`. */
+  /**
+   * "code" submits `name` as an IATA code; "coords" submits `latitude` and `longitude`,
+   * plus `placeCode` for places Duffel has no coordinates for (e.g. some cities).
+   */
   submit: { mode: "code"; name: string } | { mode: "coords" };
   /** Only offer cities (for hotel search, where airports aren't useful). */
   citiesOnly?: boolean;
@@ -160,6 +163,7 @@ export function PlaceInput({
             name="longitude"
             value={selected.longitude ?? ""}
           />
+          <input type="hidden" name="placeCode" value={selected.code ?? ""} />
         </>
       )}
 
