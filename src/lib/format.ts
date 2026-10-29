@@ -79,3 +79,13 @@ export function formatRelative(date: Date) {
   }
   return "just now";
 }
+
+const dayFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+
+/** Formats a timestamp as a short day, e.g. "Oct 29". */
+export function formatDay(date: Date) {
+  return dayFormat.format(date);
+}
