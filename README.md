@@ -22,6 +22,11 @@ npm run dev
 
 Configuration is optional: copy `.env.example` to `.env.local` to point at a different database.
 
+Flight and hotel search need API keys in `.env.local`:
+
+- `DUFFEL_ACCESS_TOKEN`: flights and place lookup. A `duffel_test_` token from Duffel's developer test mode is free.
+- `LITEAPI_API_KEY`: hotels. A sandbox key from the LiteAPI dashboard is free.
+
 Then open http://localhost:3000.
 
 ## Scripts

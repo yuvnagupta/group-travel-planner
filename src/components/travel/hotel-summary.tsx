@@ -7,7 +7,7 @@ export function HotelSummary({ hotel }: { hotel: HotelOption }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
       {hotel.photoUrl ? (
-        // Hotel photos are third-party URLs from Duffel; plain <img> avoids configuring remote image hosts.
+        // Hotel photos are third-party URLs from LiteAPI; plain <img> avoids configuring remote image hosts.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={hotel.photoUrl}
