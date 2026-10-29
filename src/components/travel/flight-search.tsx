@@ -6,7 +6,7 @@ import {
   searchFlightsAction,
   type SearchState,
 } from "@/app/actions/suggestions";
-import { Field } from "@/components/forms/field";
+import { DateRangeField } from "@/components/forms/date-range-field";
 import { FormMessage } from "@/components/forms/form-message";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Label } from "@/components/ui/label";
@@ -64,19 +64,15 @@ export function FlightSearch({ tripId, defaults }: FlightSearchProps) {
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-4">
-          <Field
-            name="departureDate"
-            label="Depart"
-            type="date"
-            defaultValue={v?.departureDate ?? defaults.departureDate}
-            errors={e?.departureDate}
-          />
-          <Field
-            name="returnDate"
-            label="Return (optional)"
-            type="date"
-            defaultValue={v?.returnDate ?? defaults.returnDate}
-            errors={e?.returnDate}
+          <DateRangeField
+            className="sm:col-span-2"
+            startName="departureDate"
+            endName="returnDate"
+            startLabel="Depart"
+            endLabel="Return (optional)"
+            defaultStart={v?.departureDate ?? defaults.departureDate}
+            defaultEnd={v?.returnDate ?? defaults.returnDate}
+            errors={[...(e?.departureDate ?? []), ...(e?.returnDate ?? [])]}
           />
           <div className="grid gap-2">
             <Label htmlFor="adults">Travelers</Label>

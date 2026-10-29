@@ -6,7 +6,7 @@ import {
   searchHotelsAction,
   type SearchState,
 } from "@/app/actions/suggestions";
-import { Field } from "@/components/forms/field";
+import { DateRangeField } from "@/components/forms/date-range-field";
 import { FormMessage } from "@/components/forms/form-message";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Label } from "@/components/ui/label";
@@ -55,19 +55,16 @@ export function HotelSearch({ tripId, defaults }: HotelSearchProps) {
           errors={e?.latitude ?? e?.longitude}
         />
         <div className="grid gap-4 sm:grid-cols-4">
-          <Field
-            name="checkInDate"
-            label="Check in"
-            type="date"
-            defaultValue={v?.checkInDate ?? defaults.checkInDate}
-            errors={e?.checkInDate}
-          />
-          <Field
-            name="checkOutDate"
-            label="Check out"
-            type="date"
-            defaultValue={v?.checkOutDate ?? defaults.checkOutDate}
-            errors={e?.checkOutDate}
+          <DateRangeField
+            className="sm:col-span-2"
+            startName="checkInDate"
+            endName="checkOutDate"
+            startLabel="Check in"
+            endLabel="Check out"
+            minNights={1}
+            defaultStart={v?.checkInDate ?? defaults.checkInDate}
+            defaultEnd={v?.checkOutDate ?? defaults.checkOutDate}
+            errors={[...(e?.checkInDate ?? []), ...(e?.checkOutDate ?? [])]}
           />
           <div className="grid gap-2">
             <Label htmlFor="adults">Guests</Label>
