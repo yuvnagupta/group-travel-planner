@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
 
+import { SuggestionsSection } from "@/components/suggestions/suggestions-section";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { formatDateRange } from "@/lib/format";
+import { getSuggestionsForTrip } from "@/lib/suggestions";
 import { getTripForMember } from "@/lib/trips";
 
 import { InviteForm } from "./invite-form";
@@ -43,6 +45,7 @@ async function TripDetails({
   const trip = await getTripForMember(tripId, user.id);
   if (!trip) notFound();
 
+  const suggestions = await getSuggestionsForTrip(trip.id, user.id);
   const dates = formatDateRange(trip.startDate, trip.endDate);
 
   return (
@@ -111,6 +114,25 @@ async function TripDetails({
           </CardContent>
         </Card>
       </div>
+
+      <SuggestionsSection
+        id="flights"
+        title="Flights"
+        addLabel="Suggest a flight"
+        addHref={`/trips/${trip.id}/suggest/flights`}
+        emptyText="No flights suggested yet. Search for one and suggest it to the group."
+        suggestions={suggestions.filter((s) => s.kind === "flight")}
+        userId={user.id}
+      />
+      <SuggestionsSection
+        id="hotels"
+        title="Hotels"
+        addLabel="Suggest a hotel"
+        addHref={`/trips/${trip.id}/suggest/hotels`}
+        emptyText="No hotels suggested yet. Search for one and suggest it to the group."
+        suggestions={suggestions.filter((s) => s.kind === "hotel")}
+        userId={user.id}
+      />
     </>
   );
 }
