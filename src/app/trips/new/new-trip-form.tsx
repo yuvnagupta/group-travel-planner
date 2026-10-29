@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { createTrip } from "@/app/actions/trips";
+import { DateRangeField } from "@/components/forms/date-range-field";
 import { Field } from "@/components/forms/field";
 import { FormMessage } from "@/components/forms/form-message";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -30,22 +31,13 @@ export function NewTripForm() {
         defaultValue={v?.destination}
         errors={e?.destination}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          name="startDate"
-          label="Start date"
-          type="date"
-          defaultValue={v?.startDate}
-          errors={e?.startDate}
-        />
-        <Field
-          name="endDate"
-          label="End date"
-          type="date"
-          defaultValue={v?.endDate}
-          errors={e?.endDate}
-        />
-      </div>
+      <DateRangeField
+        startName="startDate"
+        endName="endDate"
+        defaultStart={v?.startDate}
+        defaultEnd={v?.endDate}
+        errors={[...(e?.startDate ?? []), ...(e?.endDate ?? [])]}
+      />
       <SubmitButton pendingText="Creating…">Create trip</SubmitButton>
     </form>
   );
