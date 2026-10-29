@@ -3,7 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { startTransition, useActionState, useId, useState } from "react";
 
-import { addExpense } from "@/app/actions/expenses";
+import { addExpense, editExpense } from "@/app/actions/expenses";
 import { Field } from "@/components/forms/field";
 import { FormMessage } from "@/components/forms/form-message";
 import { Button } from "@/components/ui/button";
@@ -36,14 +36,33 @@ type ItemDraft = {
   values: Record<string, string>;
 };
 
+/** An existing expense to edit, as stored. */
+export type EditableExpense = {
+  id: string;
+  title: string;
+  paidById: string;
+  items: {
+    description: string | null;
+    amountCents: number;
+    splitType: SplitType;
+    shares: { userId: string; weight: number }[];
+  }[];
+};
+
 type ExpenseFormProps = {
   tripId: string;
   members: Member[];
   currentUserId: string;
+  /** When given, the form edits this expense instead of adding one. */
+  expense?: EditableExpense;
 };
 
 export function ExpenseForm(props: ExpenseFormProps) {
-  const [state, action, pending] = useActionState(addExpense, {});
+  const editing = Boolean(props.expense);
+  const [state, action, pending] = useActionState(
+    editing ? editExpense : addExpense,
+    {},
+  );
   // Start a blank form after each successful add. Adjusting state while
   // rendering (rather than in an effect) avoids rendering the stale form.
   const [seen, setSeen] = useState(state);
@@ -67,10 +86,19 @@ export function ExpenseForm(props: ExpenseFormProps) {
       }}
     >
       <input type="hidden" name="tripId" value={props.tripId} />
+      {props.expense && (
+        <input type="hidden" name="expenseId" value={props.expense.id} />
+      )}
       <FormMessage error={state.error} success={state.success} />
       <ExpenseFields key={resets} {...props} errors={state.fieldErrors} />
       <Button type="submit" disabled={pending}>
-        {pending ? "Adding…" : "Add expense"}
+        {editing
+          ? pending
+            ? "Saving…"
+            : "Save changes"
+          : pending
+            ? "Adding…"
+            : "Add expense"}
       </Button>
     </form>
   );
@@ -79,6 +107,7 @@ export function ExpenseForm(props: ExpenseFormProps) {
 function ExpenseFields({
   members,
   currentUserId,
+  expense,
   errors,
 }: ExpenseFormProps & { errors?: FormState["fieldErrors"] }) {
   const newItem = (key: number): ItemDraft => ({
@@ -90,11 +119,21 @@ function ExpenseFields({
     coveredBy: currentUserId,
     values: {},
   });
-  const [items, setItems] = useState<ItemDraft[]>(() => [newItem(0)]);
-  const [itemized, setItemized] = useState(false);
-  // Controlled so React's automatic form reset doesn't clear them on errors.
-  const [title, setTitle] = useState("");
-  const [paidById, setPaidById] = useState(currentUserId);
+  const [items, setItems] = useState<ItemDraft[]>(() =>
+    expense
+      ? expense.items.map((item, key) => ({
+          ...newItem(key),
+          ...draftOf(item),
+        }))
+      : [newItem(0)],
+  );
+  const [itemized, setItemized] = useState(
+    () =>
+      (expense?.items.length ?? 0) > 1 ||
+      Boolean(expense?.items[0]?.description),
+  );
+  const [title, setTitle] = useState(expense?.title ?? "");
+  const [paidById, setPaidById] = useState(expense?.paidById ?? currentUserId);
 
   const update = (key: number, patch: Partial<ItemDraft>) =>
     setItems((all) => all.map((i) => (i.key === key ? { ...i, ...patch } : i)));
@@ -448,6 +487,29 @@ function legendOf(type: SplitType) {
     case "shares":
       return "Enter shares per person, e.g. 2 for someone who had twice as much:";
   }
+}
+
+/** The editable fields of a stored item, the reverse of `toPayload`. */
+function draftOf(item: EditableExpense["items"][number]): Partial<ItemDraft> {
+  const ids = item.shares.map((s) => s.userId);
+  const values = Object.fromEntries(
+    item.shares.map((s) => [
+      s.userId,
+      item.splitType === "exact"
+        ? (s.weight / 100).toFixed(2)
+        : item.splitType === "percent"
+          ? String(s.weight / 100)
+          : String(s.weight),
+    ]),
+  );
+  return {
+    description: item.description ?? "",
+    amount: (item.amountCents / 100).toFixed(2),
+    splitType: item.splitType,
+    ...(item.splitType === "even" && { selected: ids }),
+    ...(item.splitType === "full" && ids[0] && { coveredBy: ids[0] }),
+    ...(item.splitType !== "even" && item.splitType !== "full" && { values }),
+  };
 }
 
 /** What the server should receive for an item. Members keep their trip order. */
