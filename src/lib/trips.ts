@@ -44,7 +44,7 @@ export async function getPendingInvitesForUser(userId: string) {
     .orderBy(desc(tripInvites.createdAt));
 }
 
-async function isMember(tripId: string, userId: string) {
+export async function isMember(tripId: string, userId: string) {
   const [row] = await db
     .select({ userId: tripMembers.userId })
     .from(tripMembers)
