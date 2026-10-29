@@ -1,4 +1,7 @@
 import { CalendarDays, Users, Wallet } from "lucide-react";
+import Link from "next/link";
+
+import { buttonVariants } from "@/components/ui/button";
 
 const features = [
   {
@@ -28,6 +31,17 @@ export default function Home() {
         <p className="text-lg text-muted-foreground">
           One place for your group&apos;s itinerary, decisions and shared costs.
         </p>
+        <div className="mt-2 flex flex-wrap gap-3">
+          <Link href="/signup" className={buttonVariants({ size: "lg" })}>
+            Get started
+          </Link>
+          <Link
+            href="/trips"
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
+            Go to my trips
+          </Link>
+        </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
