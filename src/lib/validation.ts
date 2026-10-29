@@ -196,6 +196,85 @@ export function fieldErrorsOf(error: z.ZodError) {
   >;
 }
 
+const isoDate = z.iso.date("Enter a valid date.");
+const count = (min: number, max: number, label: string) =>
+  z.coerce
+    .number()
+    .int()
+    .min(min, `${label}: at least ${min}.`)
+    .max(max, `${label}: at most ${max}.`);
+
+export const flightSearchSchema = z
+  .object({
+    origin: z
+      .string()
+      .regex(/^[A-Z]{3}$/, "Pick a departure airport or city from the list."),
+    destination: z
+      .string()
+      .regex(/^[A-Z]{3}$/, "Pick an arrival airport or city from the list."),
+    departureDate: isoDate,
+    returnDate: z
+      .string()
+      .trim()
+      .transform((v) => v || null)
+      .pipe(isoDate.nullable()),
+    adults: count(1, 9, "Travelers"),
+    cabinClass: z.enum(["economy", "premium_economy", "business", "first"]),
+  })
+  .refine((s) => s.origin !== s.destination, {
+    message: "Departure and arrival must be different.",
+    path: ["destination"],
+  })
+  .refine((s) => !s.returnDate || s.returnDate >= s.departureDate, {
+    message: "Return must be on or after departure.",
+    path: ["returnDate"],
+  });
+
+export const hotelSearchSchema = z
+  .object({
+    latitude: z.coerce
+      .number({ error: "Pick a city from the list." })
+      .min(-90)
+      .max(90),
+    longitude: z.coerce
+      .number({ error: "Pick a city from the list." })
+      .min(-180)
+      .max(180),
+    checkInDate: isoDate,
+    checkOutDate: isoDate,
+    adults: count(1, 9, "Guests"),
+    rooms: count(1, 5, "Rooms"),
+  })
+  .refine((s) => s.checkOutDate > s.checkInDate, {
+    message: "Check-out must be after check-in.",
+    path: ["checkOutDate"],
+  })
+  .refine((s) => s.rooms <= s.adults, {
+    message: "Each room needs at least one guest.",
+    path: ["rooms"],
+  });
+
+export const suggestSchema = z.object({
+  tripId: z.uuid(),
+  kind: z.enum(["flight", "hotel"]),
+  payload: z.string().max(20_000),
+  signature: z.string().max(200),
+  note: z
+    .string()
+    .trim()
+    .max(500, "Keep the note under 500 characters.")
+    .transform((v) => v || null),
+});
+
+export const commentSchema = z.object({
+  suggestionId: z.uuid(),
+  body: z
+    .string()
+    .trim()
+    .min(1, "Write a comment first.")
+    .max(1000, "Keep comments under 1000 characters."),
+});
+
 /** Field errors keyed by their full path, e.g. `items.0.amount`. */
 export function issuesByPath(error: z.ZodError) {
   const errors: Record<string, string[]> = {};

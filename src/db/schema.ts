@@ -164,3 +164,57 @@ export const expenseShares = sqliteTable(
     index("expense_shares_user_id_idx").on(t.userId),
   ],
 );
+
+export const suggestions = sqliteTable(
+  "suggestions",
+  {
+    id: id(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["flight", "hotel"] }).notNull(),
+    // Snapshot of the search result when it was suggested; offers expire, so we keep our own copy.
+    details: text("details", { mode: "json" }).notNull(),
+    priceAmount: text("price_amount").notNull(),
+    priceCurrency: text("price_currency").notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("suggestions_trip_kind_idx").on(t.tripId, t.kind)],
+);
+
+export const suggestionVotes = sqliteTable(
+  "suggestion_votes",
+  {
+    suggestionId: text("suggestion_id")
+      .notNull()
+      .references(() => suggestions.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // 1 for an upvote, -1 for a downvote.
+    value: integer("value").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.suggestionId, t.userId] })],
+);
+
+export const suggestionComments = sqliteTable(
+  "suggestion_comments",
+  {
+    id: id(),
+    suggestionId: text("suggestion_id")
+      .notNull()
+      .references(() => suggestions.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("suggestion_comments_suggestion_idx").on(t.suggestionId, t.createdAt),
+  ],
+);
