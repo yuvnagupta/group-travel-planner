@@ -30,13 +30,28 @@ async function duffel<T>(
     cache: "no-store",
   });
 
-  const json = await res.json().catch(() => null);
+  // Some errors (e.g. a product not enabled on the account) come back as plain text, not JSON.
+  const text = await res.text();
+  let json: { data?: unknown; errors?: { message?: string }[] } | null = null;
+  try {
+    json = JSON.parse(text);
+  } catch {}
+
   if (!res.ok) {
     const first = json?.errors?.[0];
-    console.error("Duffel request failed", res.status, path, json?.errors);
+    console.error(
+      "Duffel request failed",
+      res.status,
+      path,
+      json?.errors ?? text.slice(0, 200),
+    );
     if (res.status === 401)
       throw new DuffelError(
         "The Duffel access token was rejected. Check DUFFEL_ACCESS_TOKEN.",
+      );
+    if (res.status === 403 && path.startsWith("/stays"))
+      throw new DuffelError(
+        "Hotel search isn't enabled on this Duffel account yet. Ask Duffel to turn on Stays.",
       );
     if (res.status === 403)
       throw new DuffelError(
@@ -48,6 +63,8 @@ async function duffel<T>(
       );
     throw new DuffelError(first?.message ?? "The search failed. Try again.");
   }
+  if (!json)
+    throw new DuffelError("Duffel sent an unexpected response. Try again.");
   return json.data as T;
 }
 
