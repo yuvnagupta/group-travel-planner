@@ -1,4 +1,4 @@
-import { CalendarDays, MapPin } from "lucide-react";
+import { CalendarDays, MapPin, Pencil } from "lucide-react";
 import { cn } from "cn";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,8 +6,10 @@ import { Suspense } from "react";
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -28,7 +30,10 @@ import { DeleteExpenseButton } from "./delete-expense-button";
 import { ExpenseForm } from "./expense-form";
 import { InviteForm } from "./invite-form";
 
-export default function TripPage({ params }: PageProps<"/trips/[tripId]">) {
+export default function TripPage({
+  params,
+  searchParams,
+}: PageProps<"/trips/[tripId]">) {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
       <Link
@@ -40,7 +45,7 @@ export default function TripPage({ params }: PageProps<"/trips/[tripId]">) {
       <Suspense
         fallback={<p className="text-muted-foreground">Loading trip…</p>}
       >
-        <TripDetails params={params} />
+        <TripDetails params={params} searchParams={searchParams} />
       </Suspense>
     </div>
   );
@@ -48,10 +53,13 @@ export default function TripPage({ params }: PageProps<"/trips/[tripId]">) {
 
 async function TripDetails({
   params,
+  searchParams,
 }: {
   params: Promise<{ tripId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { tripId } = await params;
+  const { edit } = await searchParams;
   const user = await requireUser();
   if (!z.uuid().safeParse(tripId).success) notFound();
 
@@ -69,6 +77,12 @@ async function TripDetails({
   for (const [id, username] of await usernamesOf(missing))
     names.set(id, username);
   const nameOf = (id: string) => `@${names.get(id) ?? "unknown"}`;
+
+  // `?edit=<id>` turns the form into an editor for one of your own expenses.
+  const editing = expenses.find(
+    (e) => e.id === edit && e.createdById === user.id,
+  );
+  const tripHref = `/trips/${trip.id}`;
 
   return (
     <>
@@ -188,7 +202,9 @@ async function TripDetails({
                         key={expense.id}
                         expense={expense}
                         nameOf={nameOf}
-                        canDelete={expense.createdById === user.id}
+                        canManage={expense.createdById === user.id}
+                        isEditing={expense.id === editing?.id}
+                        editHref={`${tripHref}?edit=${expense.id}#expense-form`}
                       />
                     ))}
                   </ul>
@@ -197,15 +213,30 @@ async function TripDetails({
             </Card>
           </div>
 
-          <Card className="h-fit">
+          <Card id="expense-form" className="h-fit scroll-mt-6">
             <CardHeader>
-              <CardTitle>Add an expense</CardTitle>
+              <CardTitle>
+                {editing ? `Edit “${editing.title}”` : "Add an expense"}
+              </CardTitle>
+              {editing && (
+                <CardAction>
+                  <Link
+                    href={tripHref}
+                    className={buttonVariants({ variant: "ghost", size: "sm" })}
+                  >
+                    Cancel
+                  </Link>
+                </CardAction>
+              )}
             </CardHeader>
             <CardContent>
               <ExpenseForm
+                // Remount when switching between adding and editing.
+                key={editing?.id ?? "new"}
                 tripId={trip.id}
                 members={trip.members}
                 currentUserId={user.id}
+                expense={editing}
               />
             </CardContent>
           </Card>
@@ -285,15 +316,25 @@ function BalancesTable({
 function ExpenseRow({
   expense,
   nameOf,
-  canDelete,
+  canManage,
+  isEditing,
+  editHref,
 }: {
   expense: TripExpense;
   nameOf: (id: string) => string;
-  canDelete: boolean;
+  canManage: boolean;
+  isEditing: boolean;
+  editHref: string;
 }) {
   const itemized = expense.items.length > 1;
   return (
-    <li className="grid gap-2 py-3">
+    <li
+      className={cn(
+        "grid gap-2 py-3",
+        isEditing && "-mx-2 rounded-lg bg-muted/50 px-2",
+      )}
+      aria-current={isEditing || undefined}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="grid gap-0.5">
           <span className="font-medium">{expense.title}</span>
@@ -305,8 +346,23 @@ function ExpenseRow({
           <span className="font-medium tabular-nums">
             {formatCents(expense.amountCents)}
           </span>
-          {canDelete && (
-            <DeleteExpenseButton expenseId={expense.id} title={expense.title} />
+          {canManage && (
+            <>
+              <Link
+                href={editHref}
+                aria-label={`Edit “${expense.title}”`}
+                className={buttonVariants({
+                  variant: "ghost",
+                  size: "icon-sm",
+                })}
+              >
+                <Pencil aria-hidden />
+              </Link>
+              <DeleteExpenseButton
+                expenseId={expense.id}
+                title={expense.title}
+              />
+            </>
           )}
         </div>
       </div>

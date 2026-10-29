@@ -101,8 +101,8 @@ export function balancesOf(tripExpenses: TripExpense[]) {
 
 export type ExpenseResult = { ok: true } | { ok: false; error: string };
 
-/** Records an expense. Any member can, and everyone named must be a member. */
-export async function createExpense(
+/** Checks the acting user and everyone the expense names are trip members. */
+async function checkMembers(
   userId: string,
   input: ExpenseInput,
 ): Promise<ExpenseResult> {
@@ -127,45 +127,105 @@ export async function createExpense(
   if (members.length !== named.size) {
     return { ok: false, error: "Everyone on an expense must be on the trip." };
   }
+  return { ok: true };
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Inserts an expense's items and the shares computed from their splits. */
+async function insertItems(tx: Tx, expenseId: string, input: ExpenseInput) {
+  for (const [position, item] of input.items.entries()) {
+    const [row] = await tx
+      .insert(expenseItems)
+      .values({
+        expenseId,
+        position,
+        description: item.description,
+        amountCents: item.amountCents,
+        splitType: item.splitType,
+      })
+      .returning({ id: expenseItems.id });
+
+    const amounts = shareAmounts(
+      item.splitType,
+      item.amountCents,
+      item.participants.map((p) => p.weight),
+    );
+    await tx.insert(expenseShares).values(
+      item.participants.map((p, i) => ({
+        itemId: row.id,
+        userId: p.userId,
+        weight: p.weight,
+        amountCents: amounts[i],
+      })),
+    );
+  }
+}
+
+const totalOf = (input: ExpenseInput) =>
+  input.items.reduce((sum, i) => sum + i.amountCents, 0);
+
+/** Records an expense. Any member can, and everyone named must be a member. */
+export async function createExpense(
+  userId: string,
+  input: ExpenseInput,
+): Promise<ExpenseResult> {
+  const check = await checkMembers(userId, input);
+  if (!check.ok) return check;
 
   await db.transaction(async (tx) => {
     const [expense] = await tx
       .insert(expenses)
       .values({
-        tripId,
+        tripId: input.tripId,
         title: input.title,
-        amountCents: input.items.reduce((sum, i) => sum + i.amountCents, 0),
+        amountCents: totalOf(input),
         paidById: input.paidById,
         createdById: userId,
       })
       .returning({ id: expenses.id });
+    await insertItems(tx, expense.id, input);
+  });
+  return { ok: true };
+}
 
-    for (const [position, item] of input.items.entries()) {
-      const [row] = await tx
-        .insert(expenseItems)
-        .values({
-          expenseId: expense.id,
-          position,
-          description: item.description,
-          amountCents: item.amountCents,
-          splitType: item.splitType,
-        })
-        .returning({ id: expenseItems.id });
+/**
+ * Replaces an expense's details, items and splits. Only the member who added
+ * it can, and it has to stay on the same trip.
+ */
+export async function updateExpense(
+  expenseId: string,
+  userId: string,
+  input: ExpenseInput,
+): Promise<ExpenseResult> {
+  const check = await checkMembers(userId, input);
+  if (!check.ok) return check;
 
-      const amounts = shareAmounts(
-        item.splitType,
-        item.amountCents,
-        item.participants.map((p) => p.weight),
-      );
-      await tx.insert(expenseShares).values(
-        item.participants.map((p, i) => ({
-          itemId: row.id,
-          userId: p.userId,
-          weight: p.weight,
-          amountCents: amounts[i],
-        })),
-      );
-    }
+  const where = and(
+    eq(expenses.id, expenseId),
+    eq(expenses.tripId, input.tripId),
+    eq(expenses.createdById, userId),
+  );
+  const [expense] = await db
+    .select({ id: expenses.id })
+    .from(expenses)
+    .where(where);
+  if (!expense) {
+    return { ok: false, error: "You can only edit expenses you added." };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(expenses)
+      .set({
+        title: input.title,
+        amountCents: totalOf(input),
+        paidById: input.paidById,
+      })
+      .where(where);
+    // Shares go with their items via ON DELETE CASCADE.
+    await tx.delete(expenseItems).where(eq(expenseItems.expenseId, expenseId));
+    await insertItems(tx, expenseId, input);
   });
   return { ok: true };
 }
