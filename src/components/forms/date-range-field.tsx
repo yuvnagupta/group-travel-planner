@@ -79,12 +79,15 @@ type DateRangeFieldProps = {
   defaultStart?: string;
   defaultEnd?: string;
   errors?: string[];
+  /** Shortest allowed range, e.g. 1 for hotels where check-out follows check-in. */
+  minNights?: number;
+  className?: string;
 };
 
 /**
  * A travel-site style date range picker: two fields that share one calendar.
  * Picking a start date moves straight on to the end date, and while choosing
- * the end date every day before the start is disabled.
+ * the end date every day before the start (plus `minNights`) is disabled.
  */
 export function DateRangeField({
   startName,
@@ -94,6 +97,8 @@ export function DateRangeField({
   defaultStart,
   defaultEnd,
   errors,
+  minNights = 0,
+  className,
 }: DateRangeFieldProps) {
   const id = useId();
   const [start, setStart] = useState<string | null>(defaultStart || null);
@@ -117,8 +122,11 @@ export function DateRangeField({
   const invalid = Boolean(errors?.length);
   const errorId = `${id}-error`;
   // While picking the end date, nothing before the start can be chosen.
+  const earliestEnd = start && addDays(start, minNights);
   const minSelectable =
-    active === "end" && start && start > today ? start : today;
+    active === "end" && earliestEnd && earliestEnd > today
+      ? earliestEnd
+      : today;
 
   function openAt(edge: Edge) {
     const now = todayISO();
@@ -139,7 +147,7 @@ export function DateRangeField({
   function select(day: string) {
     if (active === "start" || !start) {
       setStart(day);
-      if (end && end < day) setEnd(null);
+      if (end && end < addDays(day, minNights)) setEnd(null);
       setActive("end");
     } else {
       setEnd(day);
@@ -215,7 +223,7 @@ export function DateRangeField({
   return (
     <div
       ref={rootRef}
-      className="grid gap-2"
+      className={cn("grid gap-2", className)}
       onBlur={(event) => {
         // Tabbing away closes the calendar. A null relatedTarget means focus
         // was lost to a re-render (e.g. paging months), so stay open then.
