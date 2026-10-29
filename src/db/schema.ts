@@ -8,6 +8,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+import { SPLIT_TYPES } from "../lib/splits";
+
 const id = () =>
   text("id")
     .primaryKey()
@@ -93,5 +95,72 @@ export const tripInvites = sqliteTable(
   (t) => [
     uniqueIndex("trip_invites_trip_invitee_idx").on(t.tripId, t.inviteeId),
     index("trip_invites_invitee_idx").on(t.inviteeId, t.status),
+  ],
+);
+
+export const expenses = sqliteTable(
+  "expenses",
+  {
+    id: id(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // Money is stored as integer cents. Always the sum of the expense's items.
+    amountCents: integer("amount_cents").notNull(),
+    paidById: text("paid_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("expenses_trip_id_idx").on(t.tripId, t.createdAt)],
+);
+
+export const splitTypes = [
+  "even",
+  "full",
+  "exact",
+  "percent",
+  "shares",
+] as const;
+
+// Every expense has at least one item; an expense that isn't itemized has a
+// single item with no description. Each item carries its own split.
+export const expenseItems = sqliteTable(
+  "expense_items",
+  {
+    id: id(),
+    expenseId: text("expense_id")
+      .notNull()
+      .references(() => expenses.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    description: text("description"),
+    amountCents: integer("amount_cents").notNull(),
+    splitType: text("split_type", { enum: SPLIT_TYPES }).notNull(),
+  },
+  (t) => [index("expense_items_expense_id_idx").on(t.expenseId, t.position)],
+);
+
+export const expenseShares = sqliteTable(
+  "expense_shares",
+  {
+    itemId: text("item_id")
+      .notNull()
+      .references(() => expenseItems.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // What was entered for this person: 1 for even/full splits, cents for
+    // exact amounts, basis points for percentages, or a share count.
+    weight: integer("weight").notNull(),
+    // What this person owes for the item; an item's shares sum to its amount.
+    amountCents: integer("amount_cents").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.itemId, t.userId] }),
+    index("expense_shares_user_id_idx").on(t.userId),
   ],
 );

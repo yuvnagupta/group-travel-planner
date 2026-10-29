@@ -14,3 +14,13 @@ export function formatDateRange(start: string | null, end: string | null) {
   if (end) return `Until ${fmt(end)}`;
   return null;
 }
+
+const dayFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+
+/** Formats a timestamp as a short day, e.g. "Oct 29". */
+export function formatDay(date: Date) {
+  return dayFormat.format(date);
+}
