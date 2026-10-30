@@ -1,4 +1,4 @@
-import { CalendarDays, MapPin, Pencil } from "lucide-react";
+import { CalendarDays, MapPin, Pencil, Settings } from "lucide-react";
 import { cn } from "cn";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -112,6 +112,15 @@ async function TripDetails({
         <Card>
           <CardHeader>
             <CardTitle>Members ({trip.members.length})</CardTitle>
+            <CardAction>
+              <Link
+                href={`/trips/${trip.id}/settings`}
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
+                <Settings aria-hidden />
+                {trip.ownerId === user.id ? "Manage trip" : "Trip settings"}
+              </Link>
+            </CardAction>
           </CardHeader>
           <CardContent>
             <ul className="divide-y">
