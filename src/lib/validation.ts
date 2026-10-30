@@ -284,3 +284,48 @@ export function issuesByPath(error: z.ZodError) {
   }
   return errors;
 }
+
+const time = z
+  .string()
+  .trim()
+  .transform((v) => v || null)
+  .pipe(
+    z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid time.")
+      .nullable(),
+  );
+
+const optionalText = (max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, `Keep the ${label} under ${max} characters.`)
+    .transform((v) => v || null);
+
+export const itineraryItemSchema = z
+  .object({
+    day: z
+      .string()
+      .trim()
+      .transform((v) => v || null)
+      .pipe(z.iso.date("Pick a day.").nullable()),
+    title: z
+      .string()
+      .trim()
+      .min(1, "Give it a name.")
+      .max(120, "Keep the name under 120 characters."),
+    category: z.enum(["activity", "food", "transport", "lodging", "other"]),
+    startTime: time,
+    endTime: time,
+    location: optionalText(200, "location"),
+    notes: optionalText(2000, "notes"),
+  })
+  .refine((i) => !i.endTime || i.startTime, {
+    message: "Add a start time too.",
+    path: ["startTime"],
+  })
+  .refine((i) => !i.startTime || !i.endTime || i.endTime > i.startTime, {
+    message: "End must be after the start.",
+    path: ["endTime"],
+  });

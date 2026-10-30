@@ -1,4 +1,4 @@
-import { CalendarDays, MapPin, Pencil } from "lucide-react";
+import { CalendarDays, ListOrdered, MapPin, Pencil } from "lucide-react";
 import { cn } from "cn";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -91,7 +91,16 @@ async function TripDetails({
     <>
       <title>{`${trip.name} · Group Travel Planner`}</title>
       <header className="grid gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">{trip.name}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight">{trip.name}</h1>
+          <Link
+            href={`${tripHref}/itinerary`}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            <ListOrdered aria-hidden />
+            Itinerary
+          </Link>
+        </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
           {trip.destination && (
             <span className="flex items-center gap-1.5">

@@ -218,3 +218,41 @@ export const suggestionComments = sqliteTable(
     index("suggestion_comments_suggestion_idx").on(t.suggestionId, t.createdAt),
   ],
 );
+
+export const itineraryCategories = [
+  "activity",
+  "food",
+  "transport",
+  "lodging",
+  "other",
+] as const;
+
+export const itineraryItems = sqliteTable(
+  "itinerary_items",
+  {
+    id: id(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    // ISO date (YYYY-MM-DD), or null for ideas not yet placed on a day.
+    day: text("day"),
+    // Order within the day; rewritten as 0..n-1 whenever items move.
+    position: integer("position").notNull(),
+    title: text("title").notNull(),
+    category: text("category", { enum: itineraryCategories })
+      .notNull()
+      .default("activity"),
+    // Local times at the destination (HH:MM), no time zone.
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+    location: text("location"),
+    notes: text("notes"),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("itinerary_items_trip_day_idx").on(t.tripId, t.day, t.position),
+  ],
+);

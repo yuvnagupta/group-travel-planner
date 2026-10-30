@@ -89,3 +89,33 @@ const dayFormat = new Intl.DateTimeFormat("en-US", {
 export function formatDay(date: Date) {
   return dayFormat.format(date);
 }
+
+/** "14:30" → "2:30 PM". */
+export function formatClock(hhmm: string) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+const weekdayFormat = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
+/** "2027-06-03" → "Thu, Jun 3". */
+export function formatWeekday(isoDate: string) {
+  return weekdayFormat.format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+/** Every ISO date from start to end inclusive, capped so a typo can't make thousands of days. */
+export function daysBetween(start: string, end: string, max = 90) {
+  const days: string[] = [];
+  const d = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  while (d <= last && days.length < max) {
+    days.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return days;
+}
