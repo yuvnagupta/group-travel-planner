@@ -13,8 +13,9 @@ import {
   deleteSuggestion,
   vote,
 } from "@/lib/suggestions";
-import { DuffelError, searchFlights, suggestPlaces } from "@/lib/travel/duffel";
-import { LiteApiError, searchHotels } from "@/lib/travel/liteapi";
+import { getSearchPage, type SearchQuery } from "@/lib/travel/cache";
+import { DuffelError, suggestPlacesCached } from "@/lib/travel/duffel";
+import { LiteApiError } from "@/lib/travel/liteapi";
 import { signOption, verifyOption } from "@/lib/travel/signing";
 import type {
   FlightOption,
@@ -32,7 +33,16 @@ import {
   type FormState,
 } from "@/lib/validation";
 
-export type SearchState<T> = FormState & { results?: Signed<T>[] };
+export type SearchState<T> = FormState & {
+  results?: Signed<T>[];
+  page?: number;
+  pageCount?: number;
+  total?: number;
+  /** ISO time the results were last fetched from the API. */
+  fetchedAt?: string;
+  /** The results were stale and the server is checking the API for new ones. */
+  refreshing?: boolean;
+};
 
 const tripIdSchema = z.uuid();
 
@@ -59,7 +69,7 @@ async function tripSearchDefaults(
   if (!trip?.destination || !trip.startDate || trip.startDate < today)
     return null;
 
-  const place = pick(await suggestPlaces(trip.destination));
+  const place = pick(await suggestPlacesCached(trip.destination));
   if (!place) return null;
 
   const travelers = Math.min(trip.members.length, 9);
@@ -74,6 +84,35 @@ function searchError(error: unknown, values: Record<string, string>) {
   if (error instanceof DuffelError || error instanceof LiteApiError)
     return { error: error.message, values };
   throw error;
+}
+
+/**
+ * Reads a page of cached results. `page` and `force` (the refresh button) are
+ * per request, so they're left out of the values the form sends back.
+ */
+async function cachedSearch<T>(
+  query: SearchQuery,
+  values: Record<string, string>,
+): Promise<SearchState<T>> {
+  const { page, force, ...rest } = values;
+  try {
+    const result = await getSearchPage(query, {
+      page: Number(page) || 1,
+      force: force === "1",
+    });
+    return {
+      ...(result.error ? searchError(result.error, rest) : {}),
+      values: rest,
+      results: result.results.map((o) => signOption(query.kind, o as T)),
+      page: result.page,
+      pageCount: result.pageCount,
+      total: result.total,
+      fetchedAt: result.fetchedAt.toISOString(),
+      refreshing: result.refreshing,
+    };
+  } catch (e) {
+    return searchError(e, rest);
+  }
 }
 
 export async function searchFlightsAction(
@@ -121,12 +160,7 @@ export async function searchFlightsAction(
   if (!parsed.success)
     return { fieldErrors: fieldErrorsOf(parsed.error), values };
 
-  try {
-    const options = await searchFlights(parsed.data);
-    return { values, results: options.map((o) => signOption("flight", o)) };
-  } catch (e) {
-    return searchError(e, values);
-  }
+  return cachedSearch({ kind: "flight", params: parsed.data }, values);
 }
 
 export async function searchHotelsAction(
@@ -175,12 +209,7 @@ export async function searchHotelsAction(
   if (!parsed.success)
     return { fieldErrors: fieldErrorsOf(parsed.error), values };
 
-  try {
-    const options = await searchHotels(parsed.data);
-    return { values, results: options.map((o) => signOption("hotel", o)) };
-  } catch (e) {
-    return searchError(e, values);
-  }
+  return cachedSearch({ kind: "hotel", params: parsed.data }, values);
 }
 
 export async function suggestOptionAction(

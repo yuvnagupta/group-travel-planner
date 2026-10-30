@@ -1,10 +1,20 @@
 import "server-only";
 
+import { cacheLife } from "next/cache";
+
 import type { FlightOption, Place } from "./types";
 
 const BASE_URL = "https://api.duffel.com";
 
-export class DuffelError extends Error {}
+export class DuffelError extends Error {
+  constructor(
+    message: string,
+    /** The HTTP status, when Duffel answered at all. */
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
 
 async function duffel<T>(
   path: string,
@@ -48,16 +58,22 @@ async function duffel<T>(
     if (res.status === 401)
       throw new DuffelError(
         "The Duffel access token was rejected. Check DUFFEL_ACCESS_TOKEN.",
+        res.status,
       );
     if (res.status === 403)
       throw new DuffelError(
         first?.message ?? "Your Duffel account doesn't have access to this.",
+        res.status,
       );
     if (res.status === 429)
       throw new DuffelError(
         "Too many searches right now. Wait a moment and try again.",
+        res.status,
       );
-    throw new DuffelError(first?.message ?? "The search failed. Try again.");
+    throw new DuffelError(
+      first?.message ?? "The search failed. Try again.",
+      res.status,
+    );
   }
   if (!json)
     throw new DuffelError("Duffel sent an unexpected response. Try again.");
@@ -112,6 +128,13 @@ export async function suggestPlaces(query: string): Promise<Place[]> {
   }));
 }
 
+/** suggestPlaces for lookups that repeat, like a trip's destination on every page load. */
+export async function suggestPlacesCached(query: string): Promise<Place[]> {
+  "use cache";
+  cacheLife("days");
+  return suggestPlaces(query);
+}
+
 export type FlightSearch = {
   origin: string;
   destination: string;
@@ -155,9 +178,35 @@ export async function searchFlights(
   );
 
   const offers = await duffel<RawOffer[]>(
-    `/air/offers?offer_request_id=${request.id}&sort=total_amount&limit=25`,
+    `/air/offers?offer_request_id=${request.id}&sort=total_amount&limit=50`,
   );
   return offers.map(normalizeOffer);
+}
+
+/**
+ * Whether Duffel still sells an offer. "unknown" when Duffel couldn't say
+ * (rate limits, outages), so callers don't drop results over a hiccup.
+ */
+export async function offerStatus(
+  offerId: string,
+): Promise<"available" | "gone" | "unknown"> {
+  try {
+    const offer = await duffel<{ expires_at?: string }>(
+      `/air/offers/${encodeURIComponent(offerId)}`,
+    );
+    return offer.expires_at && new Date(offer.expires_at) < new Date()
+      ? "gone"
+      : "available";
+  } catch (error) {
+    // 404 for unknown offers, 410/422 for expired ones.
+    if (
+      error instanceof DuffelError &&
+      error.status !== undefined &&
+      [404, 410, 422].includes(error.status)
+    )
+      return "gone";
+    return "unknown";
+  }
 }
 
 function normalizeOffer(offer: RawOffer): FlightOption {
