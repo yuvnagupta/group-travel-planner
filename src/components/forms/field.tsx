@@ -8,16 +8,24 @@ type FieldProps = React.ComponentProps<typeof Input> & {
   hint?: string;
 };
 
-export function Field({ name, label, errors, hint, ...props }: FieldProps) {
-  const errorId = `${name}-error`;
-  const hintId = `${name}-hint`;
+export function Field({
+  name,
+  label,
+  errors,
+  hint,
+  id = name,
+  ...props
+}: FieldProps) {
+  // Pass `id` when the same form appears more than once on a page.
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
   const invalid = Boolean(errors?.length);
 
   return (
-    <div className="grid gap-2">
-      <Label htmlFor={name}>{label}</Label>
+    <div className="grid content-start gap-2">
+      <Label htmlFor={id}>{label}</Label>
       <Input
-        id={name}
+        id={id}
         name={name}
         aria-invalid={invalid || undefined}
         aria-describedby={
