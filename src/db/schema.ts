@@ -181,6 +181,8 @@ export const suggestions = sqliteTable(
     priceAmount: text("price_amount").notNull(),
     priceCurrency: text("price_currency").notNull(),
     note: text("note"),
+    // Set on the one flight and one hotel the trip owner picks as the plan.
+    chosenAt: integer("chosen_at", { mode: "timestamp" }),
     createdAt: createdAt(),
   },
   (t) => [index("suggestions_trip_kind_idx").on(t.tripId, t.kind)],

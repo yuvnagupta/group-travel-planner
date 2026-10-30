@@ -1,3 +1,5 @@
+import type { Place } from "./travel/types";
+
 const dateFormat = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -88,4 +90,10 @@ const dayFormat = new Intl.DateTimeFormat("en-US", {
 /** Formats a timestamp as a short day, e.g. "Oct 29". */
 export function formatDay(date: Date) {
   return dayFormat.format(date);
+}
+
+/** "Lisbon, PT (LIS)" or "Heathrow Airport, London (LHR)". */
+export function formatPlace(place: Place) {
+  const where = place.type === "airport" ? place.cityName : place.countryCode;
+  return `${place.name}${where && where !== place.name ? `, ${where}` : ""} (${place.iataCode})`;
 }

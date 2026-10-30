@@ -1,4 +1,11 @@
-import { CalendarDays, MapPin, Pencil } from "lucide-react";
+import {
+  BedDouble,
+  CalendarDays,
+  MapPin,
+  Pencil,
+  Plane,
+  Wallet,
+} from "lucide-react";
 import { cn } from "cn";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,6 +13,8 @@ import { Suspense } from "react";
 import { z } from "zod";
 
 import { SuggestionsSection } from "@/components/suggestions/suggestions-section";
+import { FlightSearch } from "@/components/travel/flight-search";
+import { HotelSearch } from "@/components/travel/hotel-search";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -31,7 +40,7 @@ import { getTripForMember } from "@/lib/trips";
 import { DeleteExpenseButton } from "./delete-expense-button";
 import { ExpenseForm } from "./expense-form";
 import { InviteForm } from "./invite-form";
-import { ScrollToHash } from "./scroll-to-hash";
+import { TripTabs } from "./trip-tabs";
 
 export default function TripPage({
   params,
@@ -87,11 +96,17 @@ async function TripDetails({
     (e) => e.id === edit && e.createdById === user.id,
   );
   const tripHref = `/trips/${trip.id}`;
+  const isOwner = trip.ownerId === user.id;
+  const flights = suggestions.filter((s) => s.kind === "flight");
+  const hotels = suggestions.filter((s) => s.kind === "hotel");
+  // Search the destination on load when there's enough to search with; the
+  // server skips it for trips that already started.
+  const prefill = Boolean(trip.destination && trip.startDate);
+  const travelers = Math.min(trip.members.length, 9);
 
   return (
     <>
       <title>{`${trip.name} · Group Travel Planner`}</title>
-      <ScrollToHash />
       <header className="grid gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">{trip.name}</h1>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
@@ -156,120 +171,165 @@ async function TripDetails({
         </Card>
       </div>
 
-      <SuggestionsSection
-        id="flights"
-        title="Flights"
-        addLabel="Suggest a flight"
-        addHref={`/trips/${trip.id}/suggest/flights`}
-        emptyText="No flights suggested yet. Search for one and suggest it to the group."
-        suggestions={suggestions.filter((s) => s.kind === "flight")}
-        userId={user.id}
-      />
-      <SuggestionsSection
-        id="hotels"
-        title="Hotels"
-        addLabel="Suggest a hotel"
-        addHref={`/trips/${trip.id}/suggest/hotels`}
-        emptyText="No hotels suggested yet. Search for one and suggest it to the group."
-        suggestions={suggestions.filter((s) => s.kind === "hotel")}
-        userId={user.id}
-      />
-
-      <section
-        id="expenses"
-        aria-labelledby="expenses-heading"
-        className="grid scroll-mt-20 gap-4"
-      >
-        <h2
-          id="expenses-heading"
-          className="text-xl font-semibold tracking-tight"
-        >
-          Expenses
-        </h2>
-        <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
-          <div className="grid h-fit gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Balances</CardTitle>
-                <CardDescription>
-                  {formatCents(
-                    expenses.reduce((sum, e) => sum + e.amountCents, 0),
-                  )}{" "}
-                  spent across {expenses.length}{" "}
-                  {expenses.length === 1 ? "expense" : "expenses"}.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <BalancesTable
-                  rows={[...trip.members.map((m) => m.id), ...missing].map(
-                    (id) => ({
-                      id,
-                      name: nameOf(id),
-                      isYou: id === user.id,
-                      ...(balances.get(id) ?? { paidCents: 0, owedCents: 0 }),
-                    }),
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>All expenses</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {expenses.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    No expenses yet. Add the first one to start tracking who
-                    owes what.
-                  </p>
-                ) : (
-                  <ul className="divide-y">
-                    {expenses.map((expense) => (
-                      <ExpenseRow
-                        key={expense.id}
-                        expense={expense}
-                        nameOf={nameOf}
-                        canManage={expense.createdById === user.id}
-                        isEditing={expense.id === editing?.id}
-                        editHref={`${tripHref}?edit=${expense.id}#expense-form`}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card id="expense-form" className="h-fit scroll-mt-6">
-            <CardHeader>
-              <CardTitle>
-                {editing ? `Edit “${editing.title}”` : "Add an expense"}
-              </CardTitle>
-              {editing && (
-                <CardAction>
-                  <Link
-                    href={tripHref}
-                    className={buttonVariants({ variant: "ghost", size: "sm" })}
-                  >
-                    Cancel
-                  </Link>
-                </CardAction>
-              )}
-            </CardHeader>
-            <CardContent>
-              <ExpenseForm
-                // Remount when switching between adding and editing.
-                key={editing?.id ?? "new"}
-                tripId={trip.id}
-                members={trip.members}
-                currentUserId={user.id}
-                expense={editing}
+      <TripTabs
+        defaultTab={editing ? "expenses" : "flights"}
+        tabs={[
+          {
+            value: "flights",
+            label: "Flights",
+            icon: <Plane aria-hidden />,
+            count: flights.length,
+            content: (
+              <SuggestionsSection
+                id="flights"
+                noun="flight"
+                suggestions={flights}
+                userId={user.id}
+                isOwner={isOwner}
+                search={
+                  <FlightSearch
+                    tripId={trip.id}
+                    prefill={prefill}
+                    defaults={{
+                      destinationQuery: trip.destination ?? undefined,
+                      departureDate: trip.startDate ?? undefined,
+                      returnDate: trip.endDate ?? undefined,
+                      adults: travelers,
+                    }}
+                  />
+                }
               />
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+            ),
+          },
+          {
+            value: "hotels",
+            label: "Hotels",
+            icon: <BedDouble aria-hidden />,
+            count: hotels.length,
+            content: (
+              <SuggestionsSection
+                id="hotels"
+                noun="hotel"
+                suggestions={hotels}
+                userId={user.id}
+                isOwner={isOwner}
+                search={
+                  <HotelSearch
+                    tripId={trip.id}
+                    prefill={prefill && Boolean(trip.endDate)}
+                    defaults={{
+                      placeQuery: trip.destination ?? undefined,
+                      checkInDate: trip.startDate ?? undefined,
+                      checkOutDate: trip.endDate ?? undefined,
+                      adults: travelers,
+                    }}
+                  />
+                }
+              />
+            ),
+          },
+          {
+            value: "expenses",
+            label: "Expenses",
+            icon: <Wallet aria-hidden />,
+            count: expenses.length,
+            content: (
+              <section aria-label="Expenses" className="grid gap-4">
+                <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
+                  <div className="grid h-fit gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Balances</CardTitle>
+                        <CardDescription>
+                          {formatCents(
+                            expenses.reduce((sum, e) => sum + e.amountCents, 0),
+                          )}{" "}
+                          spent across {expenses.length}{" "}
+                          {expenses.length === 1 ? "expense" : "expenses"}.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <BalancesTable
+                          rows={[
+                            ...trip.members.map((m) => m.id),
+                            ...missing,
+                          ].map((id) => ({
+                            id,
+                            name: nameOf(id),
+                            isYou: id === user.id,
+                            ...(balances.get(id) ?? {
+                              paidCents: 0,
+                              owedCents: 0,
+                            }),
+                          }))}
+                        />
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>All expenses</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {expenses.length === 0 ? (
+                          <p className="text-muted-foreground">
+                            No expenses yet. Add the first one to start tracking
+                            who owes what.
+                          </p>
+                        ) : (
+                          <ul className="divide-y">
+                            {expenses.map((expense) => (
+                              <ExpenseRow
+                                key={expense.id}
+                                expense={expense}
+                                nameOf={nameOf}
+                                canManage={expense.createdById === user.id}
+                                isEditing={expense.id === editing?.id}
+                                editHref={`${tripHref}?edit=${expense.id}#expense-form`}
+                              />
+                            ))}
+                          </ul>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card id="expense-form" className="h-fit scroll-mt-6">
+                    <CardHeader>
+                      <CardTitle>
+                        {editing ? `Edit “${editing.title}”` : "Add an expense"}
+                      </CardTitle>
+                      {editing && (
+                        <CardAction>
+                          <Link
+                            href={tripHref}
+                            className={buttonVariants({
+                              variant: "ghost",
+                              size: "sm",
+                            })}
+                          >
+                            Cancel
+                          </Link>
+                        </CardAction>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <ExpenseForm
+                        // Remount when switching between adding and editing.
+                        key={editing?.id ?? "new"}
+                        tripId={trip.id}
+                        members={trip.members}
+                        currentUserId={user.id}
+                        expense={editing}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+              </section>
+            ),
+          },
+        ]}
+      />
     </>
   );
 }
