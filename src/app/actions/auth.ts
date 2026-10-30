@@ -50,7 +50,7 @@ export async function signup(
   }
 
   await createSession(userId);
-  redirect("/trips");
+  redirect("/");
 }
 
 export async function login(
@@ -75,7 +75,7 @@ export async function login(
     return { error: "Incorrect username or password.", values };
 
   await createSession(user.id);
-  redirect("/trips");
+  redirect("/");
 }
 
 export async function logout() {
