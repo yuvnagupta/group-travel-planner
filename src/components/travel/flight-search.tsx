@@ -1,17 +1,8 @@
 "use client";
 
-import {
-  startTransition,
-  useActionState,
-  useEffect,
-  useId,
-  useRef,
-} from "react";
+import { useEffect, useId, useRef } from "react";
 
-import {
-  searchFlightsAction,
-  type SearchState,
-} from "@/app/actions/suggestions";
+import { searchFlightsAction } from "@/app/actions/suggestions";
 import { DateRangeField } from "@/components/forms/date-range-field";
 import { FormMessage } from "@/components/forms/form-message";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -21,6 +12,7 @@ import type { FlightOption } from "@/lib/travel/types";
 import { FlightSummary } from "./flight-summary";
 import { PlaceInput } from "./place-input";
 import { SearchResults } from "./search-results";
+import { useCachedSearch } from "./use-cached-search";
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
@@ -51,10 +43,8 @@ type FlightSearchProps = {
 };
 
 export function FlightSearch({ tripId, defaults, prefill }: FlightSearchProps) {
-  const [state, action, pending] = useActionState<
-    SearchState<FlightOption>,
-    FormData
-  >(searchFlightsAction, {});
+  const { state, pending, mode, search, searchWith, goToPage, refresh } =
+    useCachedSearch<FlightOption>(searchFlightsAction);
   const v = state.values;
   const e = state.fieldErrors;
   const id = useId();
@@ -63,16 +53,8 @@ export function FlightSearch({ tripId, defaults, prefill }: FlightSearchProps) {
   useEffect(() => {
     if (!prefill || prefillStarted.current) return;
     prefillStarted.current = true;
-    const formData = new FormData();
-    formData.set("tripId", tripId);
-    formData.set("prefill", "1");
-    const saved = readOrigin();
-    if (saved) {
-      formData.set("originQuery", saved.originQuery);
-      formData.set("origin", saved.origin);
-    }
-    startTransition(() => action(formData));
-  }, [prefill, tripId, action]);
+    searchWith({ tripId, prefill: "1", ...readOrigin() });
+  }, [prefill, tripId, searchWith]);
 
   useEffect(() => {
     if (!state.results || !v?.origin) return;
@@ -90,7 +72,7 @@ export function FlightSearch({ tripId, defaults, prefill }: FlightSearchProps) {
         // Remount once the prefilled search resolves the destination, so the
         // fields show the airports and dates it searched.
         key={v?.prefilled ? "prefilled" : "initial"}
-        action={action}
+        action={search}
         className="grid gap-4 rounded-xl border bg-card p-4 sm:p-6"
         noValidate
       >
@@ -164,7 +146,7 @@ export function FlightSearch({ tripId, defaults, prefill }: FlightSearchProps) {
         </SubmitButton>
       </form>
 
-      {pending ? (
+      {pending && mode === "search" ? (
         <p className="text-muted-foreground" role="status">
           Searching airlines… this can take up to 15 seconds.
         </p>
@@ -174,6 +156,13 @@ export function FlightSearch({ tripId, defaults, prefill }: FlightSearchProps) {
             tripId={tripId}
             kind="flight"
             results={state.results}
+            page={state.page ?? 1}
+            pageCount={state.pageCount ?? 1}
+            total={state.total ?? state.results.length}
+            fetchedAt={state.fetchedAt}
+            loading={pending ? mode : null}
+            onPage={goToPage}
+            onRefresh={refresh}
             renderOption={(flight) => <FlightSummary flight={flight} />}
             emptyText="No flights found. Try different dates or nearby airports."
           />

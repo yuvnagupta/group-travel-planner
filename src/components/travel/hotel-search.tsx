@@ -1,17 +1,8 @@
 "use client";
 
-import {
-  startTransition,
-  useActionState,
-  useEffect,
-  useId,
-  useRef,
-} from "react";
+import { useEffect, useId, useRef } from "react";
 
-import {
-  searchHotelsAction,
-  type SearchState,
-} from "@/app/actions/suggestions";
+import { searchHotelsAction } from "@/app/actions/suggestions";
 import { DateRangeField } from "@/components/forms/date-range-field";
 import { FormMessage } from "@/components/forms/form-message";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -21,6 +12,7 @@ import type { HotelOption } from "@/lib/travel/types";
 import { HotelSummary } from "./hotel-summary";
 import { PlaceInput } from "./place-input";
 import { SearchResults } from "./search-results";
+import { useCachedSearch } from "./use-cached-search";
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
@@ -38,10 +30,8 @@ type HotelSearchProps = {
 };
 
 export function HotelSearch({ tripId, defaults, prefill }: HotelSearchProps) {
-  const [state, action, pending] = useActionState<
-    SearchState<HotelOption>,
-    FormData
-  >(searchHotelsAction, {});
+  const { state, pending, mode, search, searchWith, goToPage, refresh } =
+    useCachedSearch<HotelOption>(searchHotelsAction);
   const v = state.values;
   const e = state.fieldErrors;
   const id = useId();
@@ -50,11 +40,8 @@ export function HotelSearch({ tripId, defaults, prefill }: HotelSearchProps) {
   useEffect(() => {
     if (!prefill || prefillStarted.current) return;
     prefillStarted.current = true;
-    const formData = new FormData();
-    formData.set("tripId", tripId);
-    formData.set("prefill", "1");
-    startTransition(() => action(formData));
-  }, [prefill, tripId, action]);
+    searchWith({ tripId, prefill: "1" });
+  }, [prefill, tripId, searchWith]);
 
   return (
     <div className="grid gap-6">
@@ -62,7 +49,7 @@ export function HotelSearch({ tripId, defaults, prefill }: HotelSearchProps) {
         // Remount once the prefilled search resolves the destination, so the
         // fields show the place and dates it searched.
         key={v?.prefilled ? "prefilled" : "initial"}
-        action={action}
+        action={search}
         className="grid gap-4 rounded-xl border bg-card p-4 sm:p-6"
         noValidate
       >
@@ -136,7 +123,7 @@ export function HotelSearch({ tripId, defaults, prefill }: HotelSearchProps) {
         </SubmitButton>
       </form>
 
-      {pending ? (
+      {pending && mode === "search" ? (
         <p className="text-muted-foreground" role="status">
           {v || !defaults.placeQuery
             ? "Searching hotels…"
@@ -148,6 +135,13 @@ export function HotelSearch({ tripId, defaults, prefill }: HotelSearchProps) {
             tripId={tripId}
             kind="hotel"
             results={state.results}
+            page={state.page ?? 1}
+            pageCount={state.pageCount ?? 1}
+            total={state.total ?? state.results.length}
+            fetchedAt={state.fetchedAt}
+            loading={pending ? mode : null}
+            onPage={goToPage}
+            onRefresh={refresh}
             renderOption={(hotel) => <HotelSummary hotel={hotel} />}
             emptyText="No hotels found. Try different dates or a nearby city."
           />

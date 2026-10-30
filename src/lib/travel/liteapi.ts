@@ -95,11 +95,17 @@ function occupancies(adults: number, rooms: number) {
   }));
 }
 
+/**
+ * Hotels with rooms for the search, cheapest first. With `hotelIds`, only those
+ * hotels are checked, which is how cached results are confirmed still bookable.
+ */
 export async function searchHotels(
   search: HotelSearch,
+  hotelIds?: string[],
 ): Promise<HotelOption[]> {
-  const where =
-    search.latitude !== null && search.longitude !== null
+  const where = hotelIds
+    ? { hotelIds }
+    : search.latitude !== null && search.longitude !== null
       ? {
           latitude: search.latitude,
           longitude: search.longitude,
@@ -148,6 +154,5 @@ export async function searchHotels(
         },
       ];
     })
-    .sort((a, b) => Number(a.totalAmount) - Number(b.totalAmount))
-    .slice(0, 30);
+    .sort((a, b) => Number(a.totalAmount) - Number(b.totalAmount));
 }

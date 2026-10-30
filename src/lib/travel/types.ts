@@ -1,5 +1,8 @@
 // Normalized search results shared by the server and the search UI.
 
+/** Search results shown per page. */
+export const SEARCH_PAGE_SIZE = 10;
+
 export type Place = {
   type: "airport" | "city";
   iataCode: string;

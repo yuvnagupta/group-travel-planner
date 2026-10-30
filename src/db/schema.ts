@@ -3,6 +3,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -218,5 +219,44 @@ export const suggestionComments = sqliteTable(
   },
   (t) => [
     index("suggestion_comments_suggestion_idx").on(t.suggestionId, t.createdAt),
+  ],
+);
+
+// Search results are cached so the trip page doesn't call the flight and hotel
+// APIs on every load. One row per distinct search, shared by everyone who runs it.
+export const searchCaches = sqliteTable(
+  "search_caches",
+  {
+    id: id(),
+    kind: text("kind", { enum: ["flight", "hotel"] }).notNull(),
+    // SHA-256 of the normalized search parameters.
+    key: text("key").notNull(),
+    params: text("params", { mode: "json" }).notNull(),
+    fetchedAt: integer("fetched_at", { mode: "timestamp" }).notNull(),
+    // Set while a background check runs, so concurrent loads don't start another.
+    refreshStartedAt: integer("refresh_started_at", { mode: "timestamp" }),
+  },
+  (t) => [uniqueIndex("search_caches_kind_key_idx").on(t.kind, t.key)],
+);
+
+export const searchResults = sqliteTable(
+  "search_results",
+  {
+    cacheId: text("cache_id")
+      .notNull()
+      .references(() => searchCaches.id, { onDelete: "cascade" }),
+    // Stays the same across searches: the hotel id, or the flights and times
+    // for an itinerary (Duffel issues new offer ids on every search).
+    resultKey: text("result_key").notNull(),
+    option: text("option", { mode: "json" }).notNull(),
+    price: real("price").notNull(),
+    firstSeenAt: integer("first_seen_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.cacheId, t.resultKey] }),
+    index("search_results_cache_price_idx").on(t.cacheId, t.price),
   ],
 );
