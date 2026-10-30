@@ -67,7 +67,11 @@ export async function getTripForMember(tripId: string, userId: string) {
     .orderBy(asc(tripMembers.joinedAt));
 
   const pendingInvites = await db
-    .select({ id: tripInvites.id, username: users.username })
+    .select({
+      id: tripInvites.id,
+      username: users.username,
+      inviterId: tripInvites.inviterId,
+    })
     .from(tripInvites)
     .innerJoin(users, eq(tripInvites.inviteeId, users.id))
     .where(

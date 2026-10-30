@@ -112,6 +112,14 @@ async function TripDetails({
         <Card>
           <CardHeader>
             <CardTitle>Members ({trip.members.length})</CardTitle>
+            <CardAction>
+              <Link
+                href={`/trips/${trip.id}/settings`}
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
+                {trip.ownerId === user.id ? "Manage trip" : "Trip settings"}
+              </Link>
+            </CardAction>
           </CardHeader>
           <CardContent>
             <ul className="divide-y">
