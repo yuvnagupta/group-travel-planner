@@ -1,7 +1,11 @@
 import { CalendarDays, Users, Wallet } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/auth";
+
+import { TripDashboard } from "./trip-dashboard";
 
 const features = [
   {
@@ -22,6 +26,20 @@ const features = [
 ];
 
 export default function Home() {
+  return (
+    // Reads the session to choose between the dashboard and the landing page.
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+async function HomeContent() {
+  const user = await getCurrentUser();
+  return user ? <TripDashboard user={user} /> : <Landing />;
+}
+
+function Landing() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-16 px-4 py-20 sm:px-6">
       <section className="flex max-w-2xl flex-col gap-4">

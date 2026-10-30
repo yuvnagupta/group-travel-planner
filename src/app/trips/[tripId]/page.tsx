@@ -31,6 +31,7 @@ import { getTripForMember } from "@/lib/trips";
 import { DeleteExpenseButton } from "./delete-expense-button";
 import { ExpenseForm } from "./expense-form";
 import { InviteForm } from "./invite-form";
+import { ScrollToHash } from "./scroll-to-hash";
 
 export default function TripPage({
   params,
@@ -90,6 +91,7 @@ async function TripDetails({
   return (
     <>
       <title>{`${trip.name} · Group Travel Planner`}</title>
+      <ScrollToHash />
       <header className="grid gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">{trip.name}</h1>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
@@ -173,7 +175,11 @@ async function TripDetails({
         userId={user.id}
       />
 
-      <section aria-labelledby="expenses-heading" className="grid gap-4">
+      <section
+        id="expenses"
+        aria-labelledby="expenses-heading"
+        className="grid scroll-mt-20 gap-4"
+      >
         <h2
           id="expenses-heading"
           className="text-xl font-semibold tracking-tight"
