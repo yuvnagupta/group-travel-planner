@@ -1,6 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useId,
+  useRef,
+} from "react";
 
 import {
   searchHotelsAction,
@@ -25,25 +31,43 @@ type HotelSearchProps = {
     placeQuery?: string;
     checkInDate?: string;
     checkOutDate?: string;
+    adults?: number;
   };
+  /** Search the trip's destination and dates as soon as the form loads. */
+  prefill?: boolean;
 };
 
-export function HotelSearch({ tripId, defaults }: HotelSearchProps) {
+export function HotelSearch({ tripId, defaults, prefill }: HotelSearchProps) {
   const [state, action, pending] = useActionState<
     SearchState<HotelOption>,
     FormData
   >(searchHotelsAction, {});
   const v = state.values;
   const e = state.fieldErrors;
+  const id = useId();
+
+  const prefillStarted = useRef(false);
+  useEffect(() => {
+    if (!prefill || prefillStarted.current) return;
+    prefillStarted.current = true;
+    const formData = new FormData();
+    formData.set("tripId", tripId);
+    formData.set("prefill", "1");
+    startTransition(() => action(formData));
+  }, [prefill, tripId, action]);
 
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-6">
       <form
+        // Remount once the prefilled search resolves the destination, so the
+        // fields show the place and dates it searched.
+        key={v?.prefilled ? "prefilled" : "initial"}
         action={action}
         className="grid gap-4 rounded-xl border bg-card p-4 sm:p-6"
         noValidate
       >
         <input type="hidden" name="tripId" value={tripId} />
+        <input type="hidden" name="prefilled" value={v?.prefilled ?? ""} />
         <FormMessage error={state.error} />
         <PlaceInput
           label="Where"
@@ -71,11 +95,11 @@ export function HotelSearch({ tripId, defaults }: HotelSearchProps) {
             errors={[...(e?.checkInDate ?? []), ...(e?.checkOutDate ?? [])]}
           />
           <div className="grid gap-2">
-            <Label htmlFor="adults">Guests</Label>
+            <Label htmlFor={`${id}-adults`}>Guests</Label>
             <select
-              id="adults"
+              id={`${id}-adults`}
               name="adults"
-              defaultValue={v?.adults ?? "2"}
+              defaultValue={v?.adults ?? String(defaults.adults ?? 2)}
               className={selectClass}
             >
               {Array.from({ length: 9 }, (_, i) => (
@@ -86,9 +110,9 @@ export function HotelSearch({ tripId, defaults }: HotelSearchProps) {
             </select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="rooms">Rooms</Label>
+            <Label htmlFor={`${id}-rooms`}>Rooms</Label>
             <select
-              id="rooms"
+              id={`${id}-rooms`}
               name="rooms"
               defaultValue={v?.rooms ?? "1"}
               className={selectClass}
@@ -114,7 +138,9 @@ export function HotelSearch({ tripId, defaults }: HotelSearchProps) {
 
       {pending ? (
         <p className="text-muted-foreground" role="status">
-          Searching hotels…
+          {v || !defaults.placeQuery
+            ? "Searching hotels…"
+            : `Finding hotels in ${defaults.placeQuery}…`}
         </p>
       ) : (
         state.results && (

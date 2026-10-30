@@ -164,7 +164,7 @@ function TripCard({ trip, today }: { trip: TripSummary; today: string }) {
           className="grid gap-2 sm:grid-cols-3"
         >
           <QuickLink
-            href={`${tripHref}/suggest/flights`}
+            href={`${tripHref}#flights`}
             icon={Route}
             label="Build itinerary"
             detail="Find flights and hotels"

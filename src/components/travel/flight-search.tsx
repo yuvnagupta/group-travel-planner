@@ -1,6 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useId,
+  useRef,
+} from "react";
 
 import {
   searchFlightsAction,
@@ -19,31 +25,77 @@ import { SearchResults } from "./search-results";
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
+// The last departure this browser searched from, so the trip page can search
+// flights for you on load.
+const ORIGIN_KEY = "flight-search-origin";
+
+function readOrigin(): { originQuery: string; origin: string } | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ORIGIN_KEY) ?? "null");
+    return typeof saved?.origin === "string" ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 type FlightSearchProps = {
   tripId: string;
   defaults: {
     destinationQuery?: string;
     departureDate?: string;
     returnDate?: string;
+    adults?: number;
   };
+  /** Search the trip's destination and dates as soon as the form loads. */
+  prefill?: boolean;
 };
 
-export function FlightSearch({ tripId, defaults }: FlightSearchProps) {
+export function FlightSearch({ tripId, defaults, prefill }: FlightSearchProps) {
   const [state, action, pending] = useActionState<
     SearchState<FlightOption>,
     FormData
   >(searchFlightsAction, {});
   const v = state.values;
   const e = state.fieldErrors;
+  const id = useId();
+
+  const prefillStarted = useRef(false);
+  useEffect(() => {
+    if (!prefill || prefillStarted.current) return;
+    prefillStarted.current = true;
+    const formData = new FormData();
+    formData.set("tripId", tripId);
+    formData.set("prefill", "1");
+    const saved = readOrigin();
+    if (saved) {
+      formData.set("originQuery", saved.originQuery);
+      formData.set("origin", saved.origin);
+    }
+    startTransition(() => action(formData));
+  }, [prefill, tripId, action]);
+
+  useEffect(() => {
+    if (!state.results || !v?.origin) return;
+    try {
+      localStorage.setItem(
+        ORIGIN_KEY,
+        JSON.stringify({ originQuery: v.originQuery, origin: v.origin }),
+      );
+    } catch {}
+  }, [state.results, v?.origin, v?.originQuery]);
 
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-6">
       <form
+        // Remount once the prefilled search resolves the destination, so the
+        // fields show the airports and dates it searched.
+        key={v?.prefilled ? "prefilled" : "initial"}
         action={action}
         className="grid gap-4 rounded-xl border bg-card p-4 sm:p-6"
         noValidate
       >
         <input type="hidden" name="tripId" value={tripId} />
+        <input type="hidden" name="prefilled" value={v?.prefilled ?? ""} />
         <FormMessage error={state.error} />
         <div className="grid gap-4 sm:grid-cols-2">
           <PlaceInput
@@ -75,11 +127,11 @@ export function FlightSearch({ tripId, defaults }: FlightSearchProps) {
             errors={[...(e?.departureDate ?? []), ...(e?.returnDate ?? [])]}
           />
           <div className="grid gap-2">
-            <Label htmlFor="adults">Travelers</Label>
+            <Label htmlFor={`${id}-adults`}>Travelers</Label>
             <select
-              id="adults"
+              id={`${id}-adults`}
               name="adults"
-              defaultValue={v?.adults ?? "1"}
+              defaultValue={v?.adults ?? String(defaults.adults ?? 1)}
               className={selectClass}
             >
               {Array.from({ length: 9 }, (_, i) => (
@@ -90,9 +142,9 @@ export function FlightSearch({ tripId, defaults }: FlightSearchProps) {
             </select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="cabinClass">Cabin</Label>
+            <Label htmlFor={`${id}-cabinClass`}>Cabin</Label>
             <select
-              id="cabinClass"
+              id={`${id}-cabinClass`}
               name="cabinClass"
               defaultValue={v?.cabinClass ?? "economy"}
               className={selectClass}

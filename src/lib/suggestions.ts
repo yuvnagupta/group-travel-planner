@@ -7,6 +7,7 @@ import {
   suggestionComments,
   suggestions,
   suggestionVotes,
+  trips,
   users,
 } from "@/db/schema";
 
@@ -25,6 +26,7 @@ export type SuggestionView = {
   priceAmount: string;
   priceCurrency: string;
   note: string | null;
+  chosen: boolean;
   createdAt: Date;
   author: { id: string; username: string };
   score: number;
@@ -52,6 +54,7 @@ export async function getSuggestionsForTrip(
       priceAmount: suggestions.priceAmount,
       priceCurrency: suggestions.priceCurrency,
       note: suggestions.note,
+      chosenAt: suggestions.chosenAt,
       createdAt: suggestions.createdAt,
       authorId: users.id,
       authorUsername: users.username,
@@ -88,6 +91,7 @@ export async function getSuggestionsForTrip(
       priceAmount: r.priceAmount,
       priceCurrency: r.priceCurrency,
       note: r.note,
+      chosen: r.chosenAt !== null,
       createdAt: r.createdAt,
       author: { id: r.authorId, username: r.authorUsername },
       upvotes: r.upvotes,
@@ -179,6 +183,42 @@ export async function addComment(
   await db
     .insert(suggestionComments)
     .values({ suggestionId, authorId: userId, body });
+  return true;
+}
+
+/**
+ * Makes a suggestion the trip's plan for its kind, replacing any earlier pick,
+ * or clears it. Only the trip owner decides.
+ */
+export async function chooseSuggestion(
+  suggestionId: string,
+  userId: string,
+  chosen: boolean,
+) {
+  const [row] = await db
+    .select({
+      tripId: suggestions.tripId,
+      kind: suggestions.kind,
+      ownerId: trips.ownerId,
+    })
+    .from(suggestions)
+    .innerJoin(trips, eq(suggestions.tripId, trips.id))
+    .where(eq(suggestions.id, suggestionId));
+  if (!row || row.ownerId !== userId) return false;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(suggestions)
+      .set({ chosenAt: null })
+      .where(
+        and(eq(suggestions.tripId, row.tripId), eq(suggestions.kind, row.kind)),
+      );
+    if (chosen)
+      await tx
+        .update(suggestions)
+        .set({ chosenAt: new Date() })
+        .where(eq(suggestions.id, suggestionId));
+  });
   return true;
 }
 

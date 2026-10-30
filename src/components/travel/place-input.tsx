@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatPlace } from "@/lib/format";
 import type { Place } from "@/lib/travel/types";
 
 type PlaceInputProps = {
@@ -21,11 +22,6 @@ type PlaceInputProps = {
   defaultValue?: { code?: string; latitude?: string; longitude?: string };
   errors?: string[];
 };
-
-function describe(place: Place) {
-  const where = place.type === "airport" ? place.cityName : place.countryCode;
-  return `${place.name}${where && where !== place.name ? `, ${where}` : ""} (${place.iataCode})`;
-}
 
 export function PlaceInput({
   label,
@@ -92,7 +88,7 @@ export function PlaceInput({
 
   function pick(place: Place) {
     skipNextFetch.current = true;
-    setQuery(describe(place));
+    setQuery(formatPlace(place));
     setSelected({
       code: place.iataCode,
       latitude: place.latitude?.toString(),
@@ -195,7 +191,7 @@ export function PlaceInput({
                   aria-hidden
                 />
               )}
-              <span className="truncate">{describe(place)}</span>
+              <span className="truncate">{formatPlace(place)}</span>
               <span className="ml-auto text-xs text-muted-foreground">
                 {place.type === "airport"
                   ? "Airport"

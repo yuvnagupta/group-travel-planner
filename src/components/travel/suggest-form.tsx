@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useActionState } from "react";
 
 import { suggestOptionAction } from "@/app/actions/suggestions";
@@ -21,6 +22,18 @@ export function SuggestForm({
   signature,
 }: SuggestFormProps) {
   const [state, action] = useActionState(suggestOptionAction, {});
+
+  if (state.success) {
+    return (
+      <p
+        role="status"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground"
+      >
+        <Check className="size-4 text-emerald-600" aria-hidden />
+        {state.success}
+      </p>
+    );
+  }
 
   return (
     <form action={action} className="grid gap-2">

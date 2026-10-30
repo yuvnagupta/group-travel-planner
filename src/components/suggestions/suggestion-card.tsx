@@ -1,6 +1,8 @@
-import { MessageSquare, Trash2 } from "lucide-react";
+import { CircleCheck, MessageSquare, Trash2, Undo2 } from "lucide-react";
+import { cn } from "cn";
 
 import {
+  chooseSuggestionAction,
   deleteCommentAction,
   deleteSuggestionAction,
 } from "@/app/actions/suggestions";
@@ -17,14 +19,22 @@ import { VoteButtons } from "./vote-buttons";
 export function SuggestionCard({
   suggestion,
   userId,
+  canChoose,
 }: {
   suggestion: SuggestionView;
   userId: string;
+  /** Whether this user decides the plan (the trip owner). */
+  canChoose: boolean;
 }) {
   const s = suggestion;
 
   return (
-    <article className="flex gap-3 rounded-xl border bg-card p-4">
+    <article
+      className={cn(
+        "flex gap-3 rounded-xl border bg-card p-4",
+        s.chosen && "border-primary/40 ring-1 ring-primary/20",
+      )}
+    >
       <VoteButtons suggestionId={s.id} score={s.score} myVote={s.myVote} />
 
       <div className="grid min-w-0 flex-1 gap-3">
@@ -43,20 +53,50 @@ export function SuggestionCard({
             Suggested by @{s.author.username} {formatRelative(s.createdAt)} ·{" "}
             {s.upvotes} up, {s.downvotes} down
           </span>
-          {s.author.id === userId && (
-            <form action={deleteSuggestionAction}>
-              <input type="hidden" name="id" value={s.id} />
-              <Button
-                type="submit"
-                variant="ghost"
-                size="xs"
-                className="text-muted-foreground"
-              >
-                <Trash2 aria-hidden />
-                Remove
-              </Button>
-            </form>
-          )}
+          <div className="flex items-center gap-1">
+            {canChoose && (
+              <form action={chooseSuggestionAction}>
+                <input type="hidden" name="id" value={s.id} />
+                <input
+                  type="hidden"
+                  name="chosen"
+                  value={s.chosen ? "0" : "1"}
+                />
+                <Button
+                  type="submit"
+                  variant={s.chosen ? "ghost" : "outline"}
+                  size="xs"
+                  className={cn(s.chosen && "text-muted-foreground")}
+                >
+                  {s.chosen ? (
+                    <>
+                      <Undo2 aria-hidden />
+                      Unchoose
+                    </>
+                  ) : (
+                    <>
+                      <CircleCheck aria-hidden />
+                      Choose for the trip
+                    </>
+                  )}
+                </Button>
+              </form>
+            )}
+            {s.author.id === userId && (
+              <form action={deleteSuggestionAction}>
+                <input type="hidden" name="id" value={s.id} />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                >
+                  <Trash2 aria-hidden />
+                  Remove
+                </Button>
+              </form>
+            )}
+          </div>
         </div>
 
         <details className="group rounded-lg border">

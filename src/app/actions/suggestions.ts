@@ -1,22 +1,28 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth";
+import { formatPlace } from "@/lib/format";
 import {
   addComment,
   addSuggestion,
+  chooseSuggestion,
   deleteComment,
   deleteSuggestion,
   vote,
 } from "@/lib/suggestions";
-import { DuffelError, searchFlights } from "@/lib/travel/duffel";
+import { DuffelError, searchFlights, suggestPlaces } from "@/lib/travel/duffel";
 import { LiteApiError, searchHotels } from "@/lib/travel/liteapi";
 import { signOption, verifyOption } from "@/lib/travel/signing";
-import type { FlightOption, HotelOption, Signed } from "@/lib/travel/types";
-import { isMember } from "@/lib/trips";
+import type {
+  FlightOption,
+  HotelOption,
+  Place,
+  Signed,
+} from "@/lib/travel/types";
+import { getTripForMember, isMember } from "@/lib/trips";
 import {
   commentSchema,
   fieldErrorsOf,
@@ -39,6 +45,31 @@ async function requireTripMember(formData: FormData) {
   return { user };
 }
 
+/**
+ * Search values for a trip that has a destination and upcoming dates, so the
+ * trip page can show options before anyone fills in the form. Null otherwise.
+ */
+async function tripSearchDefaults(
+  formData: FormData,
+  userId: string,
+  pick: (places: Place[]) => Place | undefined,
+) {
+  const trip = await getTripForMember(String(formData.get("tripId")), userId);
+  const today = new Date().toISOString().slice(0, 10);
+  if (!trip?.destination || !trip.startDate || trip.startDate < today)
+    return null;
+
+  const place = pick(await suggestPlaces(trip.destination));
+  if (!place) return null;
+
+  const travelers = Math.min(trip.members.length, 9);
+  return {
+    trip: { ...trip, startDate: trip.startDate },
+    place,
+    travelers,
+  };
+}
+
 function searchError(error: unknown, values: Record<string, string>) {
   if (error instanceof DuffelError || error instanceof LiteApiError)
     return { error: error.message, values };
@@ -49,11 +80,42 @@ export async function searchFlightsAction(
   _prev: SearchState<FlightOption>,
   formData: FormData,
 ): Promise<SearchState<FlightOption>> {
-  const values = Object.fromEntries(
+  let values = Object.fromEntries(
     [...formData].map(([k, v]) => [k, String(v)]),
   );
-  const { error } = await requireTripMember(formData);
+  const { user, error } = await requireTripMember(formData);
   if (error) return { error, values };
+
+  // `prefill` comes from the trip page on load, with the departure the browser
+  // remembered from an earlier search.
+  if (values.prefill) {
+    try {
+      const defaults = await tripSearchDefaults(
+        formData,
+        user.id,
+        // A city covers all of its airports.
+        (places) => places.find((p) => p.type === "city") ?? places[0],
+      );
+      if (!defaults) return {};
+      const { trip, place, travelers } = defaults;
+      values = {
+        tripId: trip.id,
+        prefilled: "1",
+        originQuery: values.originQuery,
+        origin: values.origin,
+        destinationQuery: formatPlace(place),
+        destination: place.iataCode,
+        departureDate: trip.startDate,
+        returnDate: trip.endDate ?? "",
+        adults: String(travelers),
+        cabinClass: "economy",
+      };
+    } catch (e) {
+      return searchError(e, {});
+    }
+    // No remembered departure: fill in the destination and leave "From" to the user.
+    if (!values.origin) return { values };
+  }
 
   const parsed = flightSearchSchema.safeParse(values);
   if (!parsed.success)
@@ -71,11 +133,43 @@ export async function searchHotelsAction(
   _prev: SearchState<HotelOption>,
   formData: FormData,
 ): Promise<SearchState<HotelOption>> {
-  const values = Object.fromEntries(
+  let values = Object.fromEntries(
     [...formData].map(([k, v]) => [k, String(v)]),
   );
-  const { error } = await requireTripMember(formData);
+  const { user, error } = await requireTripMember(formData);
   if (error) return { error, values };
+
+  // `prefill` comes from the trip page on load: search the trip's destination and dates.
+  if (values.prefill) {
+    try {
+      const defaults = await tripSearchDefaults(
+        formData,
+        user.id,
+        // Prefer the city over its airports; coordinates search more precisely.
+        (places) =>
+          places.find((p) => p.type === "city" && p.latitude !== null) ??
+          places.find((p) => p.type === "city") ??
+          places.find((p) => p.latitude !== null),
+      );
+      if (!defaults) return {};
+      const { trip, place, travelers } = defaults;
+      if (!trip.endDate || trip.endDate <= trip.startDate) return {};
+      values = {
+        tripId: trip.id,
+        prefilled: "1",
+        placeQuery: formatPlace(place),
+        placeCode: place.iataCode,
+        latitude: place.latitude?.toString() ?? "",
+        longitude: place.longitude?.toString() ?? "",
+        checkInDate: trip.startDate,
+        checkOutDate: trip.endDate,
+        adults: String(travelers),
+        rooms: String(Math.min(Math.ceil(travelers / 2), 5)),
+      };
+    } catch (e) {
+      return searchError(e, {});
+    }
+  }
 
   const parsed = hotelSearchSchema.safeParse(values);
   if (!parsed.success)
@@ -118,7 +212,21 @@ export async function suggestOptionAction(
   );
   if (!ok) return { error: "You're not a member of this trip." };
 
-  redirect(`/trips/${tripId}#${kind === "flight" ? "flights" : "hotels"}`);
+  refresh();
+  return { success: "Suggested to the group." };
+}
+
+const chooseSchema = z.object({
+  id: z.uuid(),
+  chosen: z.enum(["1", "0"]),
+});
+
+export async function chooseSuggestionAction(formData: FormData) {
+  const user = await requireUser();
+  const parsed = chooseSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return;
+  await chooseSuggestion(parsed.data.id, user.id, parsed.data.chosen === "1");
+  refresh();
 }
 
 const voteSchema = z.object({
